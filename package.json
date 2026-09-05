@@ -1,0 +1,15 @@
+{
+  "name": "transaction-reconciliation-engine",
+  "version": "1.0.0",
+  "description": "Financial transaction reconciliation engine matching internal ledgers against external payment gateway/bank statements with discrepancy detection and analytics",
+  "main": "index.js",
+  "bin": {
+    "reconciliation-engine": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": ["fintech", "reconciliation", "transactions", "ledger", "banking", "finance", "audit"],
+  "author": "",
+  "license": "MIT"
+}

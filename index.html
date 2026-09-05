@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Transaction Reconciliation Engine</title>
+  <style>
+    :root {
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      --bg: #090d16;
+      --bg-card: rgba(18, 26, 44, 0.75);
+      --border: rgba(255, 255, 255, 0.1);
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-sans);
+      background: radial-gradient(circle at 50% 0%, #0f2b48 0%, var(--bg) 75%);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 16px 28px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(9, 13, 22, 0.85);
+      backdrop-filter: blur(12px);
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 700;
+      font-size: 1.15rem;
+    }
+    .logo-badge {
+      background: linear-gradient(135deg, #0284c7, #3b82f6);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+    .actions { display: flex; gap: 10px; }
+    button {
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    button:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+    button.primary {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+      box-shadow: 0 0 20px rgba(59, 130, 246, 0.35);
+    }
+    button.primary:hover { background: var(--primary-hover); }
+
+    main {
+      flex: 1;
+      max-width: 1300px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+    .metric-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+    }
+    .metric-label {
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .metric-value {
+      font-family: var(--font-mono);
+      font-size: 2rem;
+      font-weight: 700;
+      margin-top: 8px;
+    }
+    .metric-sub {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+
+    .panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 20px;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .panel-title { font-size: 1rem; font-weight: 700; }
+
+    .input-columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    @media (max-width: 900px) { .input-columns { grid-template-columns: 1fr; } }
+
+    textarea {
+      width: 100%;
+      background: rgba(0, 0, 0, 0.35);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      line-height: 1.5;
+      padding: 12px;
+      outline: none;
+      resize: vertical;
+      min-height: 120px;
+    }
+    textarea:focus { border-color: var(--primary); }
+
+    .filter-bar {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .filter-btn {
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+    }
+    .filter-btn.active {
+      background: var(--primary);
+      border-color: var(--primary);
+      color: white;
+    }
+    input[type="text"] {
+      background: rgba(0, 0, 0, 0.3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 0.85rem;
+      padding: 6px 12px;
+      outline: none;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    th, td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    th {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    td code {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      background: rgba(255, 255, 255, 0.05);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+    .badge-matched { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+    .badge-discrepancy { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+    .badge-unmatched { background: rgba(239, 68, 68, 0.2); color: #fca5a5; }
+    .badge-duplicate { background: rgba(168, 85, 247, 0.2); color: #c084fc; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <span>⚖️ Transaction Reconciliation Engine</span>
+      <span class="logo-badge">FinTech Core</span>
+    </div>
+    <div class="actions">
+      <button id="loadSampleBtn">📥 Load Sample Datasets</button>
+      <button class="primary" id="reconcileBtn">⚡ Run Reconciliation</button>
+    </div>
+  </header>
+
+  <main>
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">Reconciliation Rate</div>
+        <div class="metric-value" id="kpiRate" style="color: #60a5fa;">0%</div>
+        <div class="metric-sub" id="kpiRateSub">0 of 0 matched</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Matched Volume</div>
+        <div class="metric-value" id="kpiVolume">$0.00</div>
+        <div class="metric-sub">Settled ledger total</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Discrepancies</div>
+        <div class="metric-value" id="kpiDiscrepancies" style="color: #fbbf24;">0</div>
+        <div class="metric-sub" id="kpiDiffAmount">Amount mismatch: $0.00</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Unmatched Records</div>
+        <div class="metric-value" id="kpiUnmatched" style="color: #fca5a5;">0</div>
+        <div class="metric-sub" id="kpiUnmatchedSub">Internal & External breaks</div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Data Ingestion (CSV)</span>
+      </div>
+      <div class="input-columns">
+        <div>
+          <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 6px;">
+            1. Internal Ledger CSV (tx_id, reference, date, amount, currency, counterparty)
+          </label>
+          <textarea id="internalCsvInput"></textarea>
+        </div>
+        <div>
+          <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 6px;">
+            2. External Statement CSV (ext_id, ext_reference, value_date, settled_amount, currency, payer_name)
+          </label>
+          <textarea id="externalCsvInput"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div class="filter-bar">
+          <span style="font-size: 0.8rem; font-weight: 600; color: var(--text-muted);">Filter Status:</span>
+          <button class="filter-btn active" data-filter="ALL">All (<span id="countAll">0</span>)</button>
+          <button class="filter-btn" data-filter="MATCHED">Matched (<span id="countMatched">0</span>)</button>
+          <button class="filter-btn" data-filter="DISCREPANCY">Discrepancies (<span id="countDiscrepancy">0</span>)</button>
+          <button class="filter-btn" data-filter="UNMATCHED_INTERNAL">Unmatched Internal (<span id="countUnInt">0</span>)</button>
+          <button class="filter-btn" data-filter="UNMATCHED_EXTERNAL">Unmatched External (<span id="countUnExt">0</span>)</button>
+          <button class="filter-btn" data-filter="DUPLICATE">Duplicates (<span id="countDup">0</span>)</button>
+        </div>
+        <div>
+          <input type="text" id="searchInput" placeholder="Search reference, party...">
+          <button id="exportCsvBtn" style="padding: 6px 12px; margin-left: 6px;">📥 Export Report</button>
+        </div>
+      </div>
+
+      <div style="overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Status</th>
+              <th>Reference</th>
+              <th>Internal TXN</th>
+              <th>Internal Amount</th>
+              <th>External ID</th>
+              <th>External Amount</th>
+              <th>Variance / Note</th>
+            </tr>
+          </thead>
+          <tbody id="resultsTableBody">
+            <tr><td colspan="7" style="color: var(--text-muted); text-align: center;">Click "Run Reconciliation" to view breaks.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const sampleInternal = `tx_id,reference,date,amount,currency,counterparty,account_id
+TXN-1001,REF-9801,2026-09-01,15420.50,USD,Acme Corp,ACC-US-01
+TXN-1002,REF-9802,2026-09-01,4200.00,USD,Global Logistics,ACC-US-01
+TXN-1003,REF-9803,2026-09-02,89500.00,USD,Apex Holdings,ACC-US-02
+TXN-1004,REF-9804,2026-09-02,1250.75,EUR,Nordic Trade Oy,ACC-EU-01
+TXN-1005,REF-9805,2026-09-03,64000.00,USD,Starlight Media,ACC-US-01
+TXN-1006,REF-9806,2026-09-03,3100.20,GBP,Vanguard Retail,ACC-UK-01
+TXN-1007,REF-9807,2026-09-04,9500.00,USD,Zenith Payments,ACC-US-02
+TXN-1008,REF-9808,2026-09-04,18250.00,USD,CyberShield LLC,ACC-US-01
+TXN-1009,REF-9809,2026-09-05,55000.00,EUR,Bavaria Auto AG,ACC-EU-01
+TXN-1010,REF-9810,2026-09-05,7300.00,USD,Orion Systems,ACC-US-01`;
+
+    const sampleExternal = `ext_id,ext_reference,value_date,settled_amount,currency,payer_name,bank_ref
+EXT-7001,REF-9801,2026-09-01,15420.50,USD,Acme Corp,BNK-0019283
+EXT-7002,REF-9802,2026-09-01,4200.00,USD,Global Logistics,BNK-0019284
+EXT-7003,REF-9803,2026-09-02,89450.00,USD,Apex Holdings,BNK-0019285
+EXT-7004,REF-9804,2026-09-02,1250.75,EUR,Nordic Trade Oy,BNK-0019286
+EXT-7005,REF-9805,2026-09-03,64000.00,USD,Starlight Media,BNK-0019287
+EXT-7006,REF-9806,2026-09-03,3100.20,GBP,Vanguard Retail,BNK-0019288
+EXT-7007,REF-9808,2026-09-04,18250.00,USD,CyberShield LLC,BNK-0019289
+EXT-7008,REF-9808,2026-09-04,18250.00,USD,CyberShield LLC,BNK-0019290
+EXT-7009,REF-9999,2026-09-05,22400.00,USD,Unregistered Payer Inc,BNK-0019291
+EXT-7010,REF-9810,2026-09-05,7300.00,USD,Orion Systems,BNK-0019292`;
+
+    function parseCsv(text) {
+      const lines = text.trim().split('\n').map(l => l.trim()).filter(Boolean);
+      if (lines.length < 2) return [];
+      const headers = lines[0].split(',').map(h => h.trim());
+      return lines.slice(1).map(line => {
+        const vals = line.split(',').map(v => v.trim());
+        const row = {};
+        headers.forEach((h, i) => { row[h] = vals[i] || ''; });
+        return row;
+      });
+    }
+
+    let allReconciledItems = [];
+    let currentFilter = 'ALL';
+
+    function reconcile(internalRows, externalRows) {
+      const results = [];
+      const extByRef = new Map();
+
+      externalRows.forEach(ext => {
+        const ref = ext.ext_reference || ext.reference;
+        if (!extByRef.has(ref)) extByRef.set(ref, []);
+        extByRef.get(ref).push(ext);
+      });
+
+      const matchedExtIds = new Set();
+
+      // Process internal rows
+      internalRows.forEach(intRow => {
+        const ref = intRow.reference;
+        const matchingExts = extByRef.get(ref) || [];
+
+        if (matchingExts.length === 0) {
+          results.push({
+            status: 'UNMATCHED_INTERNAL',
+            reference: ref,
+            internalTx: intRow,
+            externalTx: null,
+            variance: null,
+            note: 'Missing in external statement'
+          });
+        } else if (matchingExts.length === 1) {
+          const extRow = matchingExts[0];
+          matchedExtIds.add(extRow.ext_id);
+
+          const intAmt = parseFloat(intRow.amount);
+          const extAmt = parseFloat(extRow.settled_amount || extRow.amount);
+          const diff = Math.round((extAmt - intAmt) * 100) / 100;
+
+          if (Math.abs(diff) < 0.001 && intRow.currency === extRow.currency) {
+            results.push({
+              status: 'MATCHED',
+              reference: ref,
+              internalTx: intRow,
+              externalTx: extRow,
+              variance: 0,
+              note: 'Exact match'
+            });
+          } else {
+            results.push({
+              status: 'DISCREPANCY',
+              reference: ref,
+              internalTx: intRow,
+              externalTx: extRow,
+              variance: diff,
+              note: `Amount diff: ${diff > 0 ? '+' : ''}${diff} ${intRow.currency}`
+            });
+          }
+        } else {
+          // Multiple external records with same reference -> Duplicates
+          matchingExts.forEach(extRow => {
+            matchedExtIds.add(extRow.ext_id);
+            results.push({
+              status: 'DUPLICATE',
+              reference: ref,
+              internalTx: intRow,
+              externalTx: extRow,
+              variance: null,
+              note: `Duplicate external settlement detected (${matchingExts.length} records)`
+            });
+          });
+        }
+      });
+
+      // Find unmatched external records
+      externalRows.forEach(extRow => {
+        if (!matchedExtIds.has(extRow.ext_id)) {
+          results.push({
+            status: 'UNMATCHED_EXTERNAL',
+            reference: extRow.ext_reference || extRow.reference,
+            internalTx: null,
+            externalTx: extRow,
+            variance: null,
+            note: 'External transaction with no internal ledger record'
+          });
+        }
+      });
+
+      return results;
+    }
+
+    function render() {
+      const q = document.getElementById('searchInput').value.toLowerCase();
+      const filtered = allReconciledItems.filter(item => {
+        if (currentFilter !== 'ALL' && item.status !== currentFilter) return false;
+        if (q) {
+          const str = `${item.reference} ${item.note} ${item.internalTx?.counterparty || ''} ${item.externalTx?.payer_name || ''}`.toLowerCase();
+          if (!str.includes(q)) return false;
+        }
+        return true;
+      });
+
+      // Counts
+      const counts = { ALL: allReconciledItems.length, MATCHED: 0, DISCREPANCY: 0, UNMATCHED_INTERNAL: 0, UNMATCHED_EXTERNAL: 0, DUPLICATE: 0 };
+      let matchedVolume = 0;
+      let totalDiscrepancyDiff = 0;
+
+      allReconciledItems.forEach(i => {
+        if (counts[i.status] !== undefined) counts[i.status]++;
+        if (i.status === 'MATCHED' && i.internalTx) {
+          matchedVolume += parseFloat(i.internalTx.amount) || 0;
+        }
+        if (i.status === 'DISCREPANCY' && i.variance !== null) {
+          totalDiscrepancyDiff += Math.abs(i.variance);
+        }
+      });
+
+      document.getElementById('countAll').textContent = counts.ALL;
+      document.getElementById('countMatched').textContent = counts.MATCHED;
+      document.getElementById('countDiscrepancy').textContent = counts.DISCREPANCY;
+      document.getElementById('countUnInt').textContent = counts.UNMATCHED_INTERNAL;
+      document.getElementById('countUnExt').textContent = counts.UNMATCHED_EXTERNAL;
+      document.getElementById('countDup').textContent = counts.DUPLICATE;
+
+      const ratePct = counts.ALL ? Math.round((counts.MATCHED / counts.ALL) * 100) : 0;
+      document.getElementById('kpiRate').textContent = `${ratePct}%`;
+      document.getElementById('kpiRateSub').textContent = `${counts.MATCHED} of ${counts.ALL} records resolved`;
+      document.getElementById('kpiVolume').textContent = `$${matchedVolume.toLocaleString('en-US', { minimumFractionDigits: 2 })}`;
+      document.getElementById('kpiDiscrepancies').textContent = counts.DISCREPANCY;
+      document.getElementById('kpiDiffAmount').textContent = `Total Variance: $${totalDiscrepancyDiff.toFixed(2)}`;
+      document.getElementById('kpiUnmatched').textContent = counts.UNMATCHED_INTERNAL + counts.UNMATCHED_EXTERNAL;
+      document.getElementById('kpiUnmatchedSub').textContent = `${counts.UNMATCHED_INTERNAL} Internal, ${counts.UNMATCHED_EXTERNAL} External breaks`;
+
+      const tbody = document.getElementById('resultsTableBody');
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="color: var(--text-muted); text-align: center;">No transactions found matching filter.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(item => {
+        let badgeClass = 'badge-matched';
+        let label = 'MATCHED';
+        if (item.status === 'DISCREPANCY') { badgeClass = 'badge-discrepancy'; label = 'DISCREPANCY'; }
+        else if (item.status === 'UNMATCHED_INTERNAL') { badgeClass = 'badge-unmatched'; label = 'UNMATCHED INT'; }
+        else if (item.status === 'UNMATCHED_EXTERNAL') { badgeClass = 'badge-unmatched'; label = 'UNMATCHED EXT'; }
+        else if (item.status === 'DUPLICATE') { badgeClass = 'badge-duplicate'; label = 'DUPLICATE'; }
+
+        const intAmt = item.internalTx ? `${item.internalTx.currency} ${parseFloat(item.internalTx.amount).toLocaleString()}` : '-';
+        const extAmt = item.externalTx ? `${item.externalTx.currency} ${parseFloat(item.externalTx.settled_amount || item.externalTx.amount).toLocaleString()}` : '-';
+
+        return `
+          <tr>
+            <td><span class="badge ${badgeClass}">${label}</span></td>
+            <td><code>${item.reference}</code></td>
+            <td>${item.internalTx ? `<code>${item.internalTx.tx_id}</code> <small style="color:var(--text-muted)">(${item.internalTx.counterparty})</small>` : '<span style="color:var(--text-muted)">N/A</span>'}</td>
+            <td>${intAmt}</td>
+            <td>${item.externalTx ? `<code>${item.externalTx.ext_id}</code>` : '<span style="color:var(--text-muted)">N/A</span>'}</td>
+            <td>${extAmt}</td>
+            <td style="color: ${item.status === 'DISCREPANCY' ? '#fbbf24' : (item.status === 'MATCHED' ? '#34d399' : '#fca5a5')}; font-size: 0.8rem;">
+              ${item.note}
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function runEngine() {
+      const intCsv = document.getElementById('internalCsvInput').value;
+      const extCsv = document.getElementById('externalCsvInput').value;
+      const intRows = parseCsv(intCsv);
+      const extRows = parseCsv(extCsv);
+
+      allReconciledItems = reconcile(intRows, extRows);
+      render();
+    }
+
+    document.getElementById('loadSampleBtn').addEventListener('click', () => {
+      document.getElementById('internalCsvInput').value = sampleInternal;
+      document.getElementById('externalCsvInput').value = sampleExternal;
+      runEngine();
+    });
+
+    document.getElementById('reconcileBtn').addEventListener('click', runEngine);
+    document.getElementById('searchInput').addEventListener('input', render);
+
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentFilter = btn.getAttribute('data-filter');
+        render();
+      });
+    });
+
+    document.getElementById('exportCsvBtn').addEventListener('click', () => {
+      if (allReconciledItems.length === 0) return alert('Run reconciliation first!');
+      let csv = 'status,reference,internal_id,internal_amount,currency,external_id,external_amount,variance,note\n';
+      allReconciledItems.forEach(i => {
+        csv += `"${i.status}","${i.reference}","${i.internalTx?.tx_id || ''}",${i.internalTx?.amount || ''},"${i.internalTx?.currency || i.externalTx?.currency || ''}","${i.externalTx?.ext_id || ''}",${i.externalTx?.settled_amount || ''},"${i.variance || ''}","${i.note}"\n`;
+      });
+      const blob = new Blob([csv], { type: 'text/csv' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'reconciliation-report.csv';
+      a.click();
+    });
+
+    // Auto-load initial sample
+    document.getElementById('internalCsvInput').value = sampleInternal;
+    document.getElementById('externalCsvInput').value = sampleExternal;
+    runEngine();
+  </script>
+</body>
+</html>
