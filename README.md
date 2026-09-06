@@ -1,6 +1,14 @@
 # Transaction Reconciliation Engine
 
+[![Live Demo](https://img.shields.io/badge/Live_Demo-recon.satyamsethi.dpdns.org-3b82f6?style=for-the-badge&logo=cloudflare&logoColor=white)](https://recon.satyamsethi.dpdns.org)
+[![Cloudflare Pages](https://img.shields.io/badge/Cloudflare_Pages-Deployment-F38020?style=for-the-badge&logo=cloudflarepages&logoColor=white)](https://transaction-reconciliation-engine.pages.dev)
+
 A lightweight, zero-dependency financial transaction reconciliation engine that matches internal ledger transactions against external payment gateway/bank statements with automated discrepancy detection, duplicate alerts, and an interactive browser dashboard.
+
+## 🌐 Live Demo
+
+- **Primary Custom Domain**: [https://recon.satyamsethi.dpdns.org](https://recon.satyamsethi.dpdns.org)
+- **Cloudflare Pages Direct**: [https://transaction-reconciliation-engine.pages.dev](https://transaction-reconciliation-engine.pages.dev)
 
 ## Features
 
